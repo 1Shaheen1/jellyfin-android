@@ -62,6 +62,8 @@ android {
 
     buildTypes {
         getByName("release") {
+            // Installs next to the official app from the Play Store
+            applicationIdSuffix = ".hdr"
             isMinifyEnabled = true
             isShrinkResources = true
 

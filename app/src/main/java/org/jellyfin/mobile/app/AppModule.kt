@@ -35,9 +35,11 @@ import org.jellyfin.mobile.downloads.DownloadsViewModel
 import org.jellyfin.mobile.downloads.FileDownloader
 import org.jellyfin.mobile.events.ActivityEventHandler
 import org.jellyfin.mobile.player.deviceprofile.DeviceProfileBuilder
+import org.jellyfin.mobile.player.deviceprofile.HdrSupport
 import org.jellyfin.mobile.player.interaction.PlayerEvent
 import org.jellyfin.mobile.player.mediasegments.MediaSegmentRepository
 import org.jellyfin.mobile.player.qualityoptions.QualityOptionsProvider
+import org.jellyfin.mobile.player.source.DolbyVisionCompatExtractorsFactory
 import org.jellyfin.mobile.player.source.MediaSourceResolver
 import org.jellyfin.mobile.player.ui.PlayerFragment
 import org.jellyfin.mobile.setup.ConnectionHelper
@@ -93,7 +95,8 @@ val applicationModule = module {
 
     // Media player helpers
     single { MediaSourceResolver(get()) }
-    single { DeviceProfileBuilder(get()) }
+    single { HdrSupport(get()) }
+    single { DeviceProfileBuilder(get(), get()) }
     single { QualityOptionsProvider() }
     single { MediaSegmentRepository() }
 
@@ -166,7 +169,13 @@ val applicationModule = module {
                 },
             )
         }
-        DefaultMediaSourceFactory(get<CacheDataSource.Factory>(), extractorsFactory)
+        DefaultMediaSourceFactory(
+            get<CacheDataSource.Factory>(),
+            when {
+                get<HdrSupport>().decodeDolbyVisionProfile7AsHevc -> DolbyVisionCompatExtractorsFactory(extractorsFactory)
+                else -> extractorsFactory
+            },
+        )
     }
 
     single(createdAtStart = true) { StorageManager(get(), get()) }

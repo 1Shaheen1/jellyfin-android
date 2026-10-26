@@ -25,6 +25,7 @@ import org.jellyfin.sdk.model.api.TranscodingProfile
 
 class DeviceProfileBuilder(
     private val appPreferences: AppPreferences,
+    private val hdrSupport: HdrSupport,
 ) {
     private val supportedVideoCodecs: Array<Array<String>>
     private val supportedAudioCodecs: Array<Array<String>>
@@ -179,8 +180,33 @@ class DeviceProfileBuilder(
         container: String,
         videoCodec: String,
     ): CodecProfile? {
-        val profilesSet = videoCodecsProfiles[videoCodec]
-        if (profilesSet?.isNotEmpty() != true) {
+        val conditions = buildList {
+            val profilesSet = videoCodecsProfiles[videoCodec]
+            if (!profilesSet.isNullOrEmpty()) {
+                add(
+                    ProfileCondition(
+                        condition = ProfileConditionType.EQUALS_ANY,
+                        property = ProfileConditionValue.VIDEO_PROFILE,
+                        value = profilesSet.joinToString("|"),
+                        isRequired = false,
+                    ),
+                )
+            }
+
+            // Let the server transcode HDR formats the display can't show, instead of direct playing them
+            val videoRangeTypes = hdrSupport.getVideoRangeTypes(videoCodec)
+            if (videoRangeTypes != null) {
+                add(
+                    ProfileCondition(
+                        condition = ProfileConditionType.EQUALS_ANY,
+                        property = ProfileConditionValue.VIDEO_RANGE_TYPE,
+                        value = videoRangeTypes.joinToString("|"),
+                        isRequired = false,
+                    ),
+                )
+            }
+        }
+        if (conditions.isEmpty()) {
             return null
         }
 
@@ -189,14 +215,7 @@ class DeviceProfileBuilder(
             container = container,
             codec = videoCodec,
             applyConditions = listOf(),
-            conditions = listOf(
-                ProfileCondition(
-                    condition = ProfileConditionType.EQUALS_ANY,
-                    property = ProfileConditionValue.VIDEO_PROFILE,
-                    value = profilesSet.joinToString("|"),
-                    isRequired = false,
-                ),
-            ),
+            conditions = conditions,
         )
     }
 

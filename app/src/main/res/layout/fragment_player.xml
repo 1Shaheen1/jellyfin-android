@@ -106,6 +106,23 @@
                 tools:progress="30" />
         </LinearLayout>
 
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/zoom_overlay_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|top"
+            android:layout_marginTop="48dp"
+            android:background="@drawable/playback_info_background"
+            android:clickable="false"
+            android:paddingHorizontal="24dp"
+            android:paddingVertical="12dp"
+            android:textColor="@android:color/white"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:text="125%"
+            tools:visibility="visible" />
+
         <ProgressBar
             android:id="@+id/loading_indicator"
             android:layout_width="64dp"

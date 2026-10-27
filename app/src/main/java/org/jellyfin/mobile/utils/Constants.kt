@@ -127,8 +127,10 @@ object Constants {
     const val FULL_SWIPE_RANGE_SCREEN_RATIO = 0.66f
     const val SCREEN_BRIGHTNESS_MAX = 255
     const val HOLD_SPEEDUP_MULTIPLIER = 3f
-    const val ZOOM_SCALE_BASE = 1f
-    const val ZOOM_SCALE_THRESHOLD = 0.01f
+    const val ZOOM_SCALE_MIN = 0.5f
+    const val ZOOM_SCALE_MAX = 4f
+    const val ZOOM_SNAP_THRESHOLD = 0.04f // distance to "fit" or "fill screen" at which the zoom snaps to it
+    const val ZOOM_OVERLAY_TIMEOUT_MS = 800
     val ASPECT_RATIO_16_9 = Rational(16, 9)
     val PIP_MIN_RATIONAL = Rational(100, 239)
     val PIP_MAX_RATIONAL = Rational(239, 100)

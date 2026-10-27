@@ -6,6 +6,7 @@ import android.provider.Settings
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.view.ViewGroup
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL
 import android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_OFF
 import android.widget.ImageView
@@ -15,11 +16,11 @@ import android.widget.TextView
 import androidx.core.content.getSystemService
 import androidx.core.view.isVisible
 import androidx.core.view.postDelayed
-import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import org.jellyfin.mobile.R
 import org.jellyfin.mobile.app.AppPreferences
 import org.jellyfin.mobile.databinding.FragmentPlayerBinding
+import org.jellyfin.mobile.utils.AndroidVersion
 import org.jellyfin.mobile.utils.Constants
 import org.jellyfin.mobile.utils.brightness
 import org.jellyfin.mobile.utils.dip
@@ -27,6 +28,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 class PlayerGestureHelper(
     private val fragment: PlayerFragment,
@@ -44,6 +47,7 @@ class PlayerGestureHelper(
     private val seekOverlayText: TextView by playerBinding::seekOverlayText
     private val seekPositionText: TextView by playerBinding::seekPositionText
     private val seekOverlayProgress: ProgressBar by playerBinding::seekOverlayProgress
+    private val zoomOverlayText: TextView by playerBinding::zoomOverlayText
     private var isOnPressingSpeedUp = false
 
     init {
@@ -53,10 +57,33 @@ class PlayerGestureHelper(
     }
 
     /**
-     * Tracks whether video content should fill the screen, cutting off unwanted content on the sides.
-     * Useful on wide-screen phones to remove black bars from some movies.
+     * Zoom of the video picture, 1 fits the video to the screen. Changed freely with a pinch gesture in landscape.
+     * Only the video surface gets scaled, so subtitles stay inside the visible area.
      */
-    private var isZoomEnabled = false
+    private var zoomScale = 1f
+
+    /**
+     * Zoom without snapping to "fit" or "fill screen", so a pinch can move past the snap points.
+     */
+    private var unsnappedZoomScale = 1f
+
+    /**
+     * Offset of the zoomed picture from the screen center, moved by pinching with two fingers.
+     */
+    private var zoomPanX = 0f
+    private var zoomPanY = 0f
+
+    /**
+     * Pinch focus point of the previous scale event, relative to the screen center.
+     */
+    private var lastZoomFocusX = 0f
+    private var lastZoomFocusY = 0f
+
+    /**
+     * Tracks whether a pinch happened since the first finger touched the screen,
+     * so lifting one finger doesn't turn the rest of the gesture into a swipe.
+     */
+    private var isZooming = false
 
     /**
      * Tracks a value during a swipe gesture (between multiple onScroll calls).
@@ -115,6 +142,13 @@ class PlayerGestureHelper(
      */
     private val hideSeekOverlayAction = Runnable {
         seekOverlayLayout.isVisible = false
+    }
+
+    /**
+     * Runnable that hides [zoomOverlayText]
+     */
+    private val hideZoomOverlayAction = Runnable {
+        zoomOverlayText.isVisible = false
     }
 
     /**
@@ -376,18 +410,40 @@ class PlayerGestureHelper(
     private val zoomGestureDetector = ScaleGestureDetector(
         playerView.context,
         object : ScaleGestureDetector.OnScaleGestureListener {
-            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean = fragment.isLandscape()
-
-            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                val scaleFactor = detector.scaleFactor
-                if (abs(scaleFactor - Constants.ZOOM_SCALE_BASE) > Constants.ZOOM_SCALE_THRESHOLD) {
-                    isZoomEnabled = scaleFactor > 1
-                    updateZoomMode(isZoomEnabled)
-                }
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                if (!isZoomAllowed()) return false
+                isZooming = true
+                unsnappedZoomScale = zoomScale
+                lastZoomFocusX = detector.focusX - playerView.width / 2f
+                lastZoomFocusY = detector.focusY - playerView.height / 2f
                 return true
             }
 
-            override fun onScaleEnd(detector: ScaleGestureDetector) = Unit
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                unsnappedZoomScale = (unsnappedZoomScale * detector.scaleFactor)
+                    .coerceIn(Constants.ZOOM_SCALE_MIN, Constants.ZOOM_SCALE_MAX)
+                val newScale = snapZoomScale(unsnappedZoomScale)
+
+                // Keep the part of the picture between the fingers under them, also when they move
+                val focusX = detector.focusX - playerView.width / 2f
+                val focusY = detector.focusY - playerView.height / 2f
+                val scaleChange = newScale / zoomScale
+                zoomPanX = focusX - (lastZoomFocusX - zoomPanX) * scaleChange
+                zoomPanY = focusY - (lastZoomFocusY - zoomPanY) * scaleChange
+                lastZoomFocusX = focusX
+                lastZoomFocusY = focusY
+                zoomScale = newScale
+                updateVideoZoom()
+
+                zoomOverlayText.text = String.format(Locale.US, "%d%%", (zoomScale * 100).roundToInt())
+                zoomOverlayText.removeCallbacks(hideZoomOverlayAction)
+                zoomOverlayText.isVisible = true
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                zoomOverlayText.postDelayed(hideZoomOverlayAction, Constants.ZOOM_OVERLAY_TIMEOUT_MS.toLong())
+            }
         },
     ).apply { isQuickScaleEnabled = false }
 
@@ -396,8 +452,16 @@ class PlayerGestureHelper(
         playerView.setOnTouchListener { _, event ->
             if (playerView.useController) {
                 when (event.pointerCount) {
-                    1 -> gestureDetector.onTouchEvent(event)
-                    2 -> zoomGestureDetector.onTouchEvent(event)
+                    1 -> if (!isZooming) gestureDetector.onTouchEvent(event)
+                    2 -> {
+                        if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+                            // Stop a long press or swipe started by the first finger
+                            val cancelEvent = MotionEvent.obtain(event).apply { action = MotionEvent.ACTION_CANCEL }
+                            gestureDetector.onTouchEvent(cancelEvent)
+                            cancelEvent.recycle()
+                        }
+                        zoomGestureDetector.onTouchEvent(event)
+                    }
                 }
             } else {
                 unlockDetector.onTouchEvent(event)
@@ -411,7 +475,7 @@ class PlayerGestureHelper(
                 }
 
                 // Handle horizontal seek gesture completion
-                if (event.action == MotionEvent.ACTION_UP && currentGesture == GestureDirection.HORIZONTAL && isHorizontalSeeking && seekTimeAccumulator != 0L) {
+                if (event.action == MotionEvent.ACTION_UP && !isZooming && currentGesture == GestureDirection.HORIZONTAL && isHorizontalSeeking && seekTimeAccumulator != 0L) {
                     fragment.onSeekByOffset(seekTimeAccumulator)
                     seekOverlayLayout.apply {
                         removeCallbacks(hideSeekOverlayAction)
@@ -423,6 +487,7 @@ class PlayerGestureHelper(
                 }
                 currentGesture = GestureDirection.NONE
                 isHorizontalSeeking = false
+                isZooming = false
                 seekTimeAccumulator = 0L
                 seekStartPosition = 0L
                 mediaDuration = 0L
@@ -443,12 +508,65 @@ class PlayerGestureHelper(
         }
     }
 
-    fun handleConfiguration(newConfig: Configuration) {
-        updateZoomMode(fragment.isLandscape(newConfig) && isZoomEnabled)
+    init {
+        playerView.videoSurfaceView?.let { surfaceView ->
+            // Let the zoomed picture extend over the black bars around the video frame,
+            // which needs the frame (the surface's parent) and the player view to not clip their children
+            (surfaceView.parent as? ViewGroup)?.clipChildren = false
+            playerView.clipChildren = false
+
+            // The surface size changes with the video's aspect ratio, which changes the allowed panning range
+            surfaceView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+                updateVideoZoom()
+            }
+        }
     }
 
-    private fun updateZoomMode(enabled: Boolean) {
-        playerView.resizeMode = if (enabled) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
+    fun handleConfiguration(newConfig: Configuration) {
+        updateVideoZoom(isZoomAllowed(newConfig))
+    }
+
+    private fun isZoomAllowed(configuration: Configuration = fragment.resources.configuration): Boolean {
+        val isInPictureInPicture = AndroidVersion.isAtLeastN && fragment.requireActivity().isInPictureInPictureMode
+        return fragment.isLandscape(configuration) && !isInPictureInPicture
+    }
+
+    /**
+     * Snaps [scale] to fitting the video into the screen or filling the screen with it, when it's close to either.
+     */
+    private fun snapZoomScale(scale: Float): Float {
+        val surfaceView = playerView.videoSurfaceView
+        val fillScale = when {
+            surfaceView == null || surfaceView.width == 0 || surfaceView.height == 0 -> 1f
+            else -> max(
+                playerView.width.toFloat() / surfaceView.width,
+                playerView.height.toFloat() / surfaceView.height,
+            )
+        }
+        return listOf(1f, fillScale).firstOrNull { snapScale ->
+            abs(scale - snapScale) < Constants.ZOOM_SNAP_THRESHOLD
+        } ?: scale
+    }
+
+    /**
+     * Applies [zoomScale] and the panning offset to the video surface, or resets them if zoom isn't [allowed].
+     */
+    private fun updateVideoZoom(allowed: Boolean = isZoomAllowed()) {
+        val surfaceView = playerView.videoSurfaceView ?: return
+        val scale = if (allowed) zoomScale else 1f
+
+        // Don't allow moving an edge of the picture into the screen
+        val maxPanX = max(0f, (surfaceView.width * scale - playerView.width) / 2)
+        val maxPanY = max(0f, (surfaceView.height * scale - playerView.height) / 2)
+        if (allowed) {
+            zoomPanX = zoomPanX.coerceIn(-maxPanX, maxPanX)
+            zoomPanY = zoomPanY.coerceIn(-maxPanY, maxPanY)
+        }
+
+        surfaceView.scaleX = scale
+        surfaceView.scaleY = scale
+        surfaceView.translationX = if (allowed) zoomPanX else 0f
+        surfaceView.translationY = if (allowed) zoomPanY else 0f
     }
 
     /**

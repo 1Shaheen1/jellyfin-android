@@ -21,6 +21,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.DefaultAnalyticsCollector
+import androidx.media3.exoplayer.mediacodec.MediaCodecAdapter
 import androidx.media3.exoplayer.mediacodec.MediaCodecDecoderException
 import androidx.media3.exoplayer.mediacodec.MediaCodecInfo
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
@@ -239,7 +240,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application),
                 .build()
             else -> DefaultLoadControl()
         }
-        val renderersFactory = DefaultRenderersFactory(getApplication()).apply {
+        val toneMapHdr = appPreferences.exoPlayerToneMapHdr
+        val renderersFactory = object : DefaultRenderersFactory(getApplication()) {
+            override fun getCodecAdapterFactory(): MediaCodecAdapter.Factory = when {
+                toneMapHdr -> ToneMappingCodecAdapterFactory(super.getCodecAdapterFactory())
+                else -> super.getCodecAdapterFactory()
+            }
+        }.apply {
             setEnableDecoderFallback(true) // Fallback only works if initialization fails, not decoding at playback time
             val rendererMode = when {
                 fallbackPreferExtensionRenderers -> DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER

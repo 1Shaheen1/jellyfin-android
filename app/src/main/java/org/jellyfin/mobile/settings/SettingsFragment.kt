@@ -59,6 +59,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
     private lateinit var rememberBrightnessPreference: Preference
     private lateinit var backgroundAudioPreference: Preference
     private lateinit var horizontalGesturePreference: Preference
+    private lateinit var toneMapHdrPreference: Preference
     private lateinit var directPlayAssPreference: Preference
     private lateinit var networkBufferPreference: Preference
     private lateinit var externalPlayerChoicePreference: Preference
@@ -127,6 +128,7 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
                 pressSpeedUpPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 backgroundAudioPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 horizontalGesturePreference.enabled = selection == VideoPlayerType.EXO_PLAYER
+                toneMapHdrPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 directPlayAssPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 networkBufferPreference.enabled = selection == VideoPlayerType.EXO_PLAYER
                 externalPlayerChoicePreference.enabled = selection == VideoPlayerType.EXTERNAL_PLAYER
@@ -167,6 +169,11 @@ class SettingsFragment : Fragment(), BackPressInterceptor {
             summaryRes = R.string.pref_exoplayer_allow_horizontal_gesture_summary
             enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
             defaultValue = true
+        }
+        toneMapHdrPreference = checkBox(Constants.PREF_EXOPLAYER_TONE_MAP_HDR) {
+            titleRes = R.string.pref_exoplayer_tone_map_hdr
+            summaryRes = R.string.pref_exoplayer_tone_map_hdr_summary
+            enabled = appPreferences.videoPlayerType == VideoPlayerType.EXO_PLAYER
         }
         directPlayAssPreference = checkBox(Constants.PREF_EXOPLAYER_DIRECT_PLAY_ASS) {
             titleRes = R.string.pref_exoplayer_direct_play_ass

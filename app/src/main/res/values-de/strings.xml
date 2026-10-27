@@ -95,6 +95,8 @@
     <string name="menu_item_auto">Automatisch</string>
     <string name="pref_exoplayer_direct_play_ass_summary">Transkodieren vermeiden und Untertitel nur mit einfachem Erscheinungsbild anzeigen. Wenn aktiviert, ist die erweiterte Untertitelgestaltung nicht verfügbar.</string>
     <string name="pref_exoplayer_direct_play_ass">Direktwiedergabe von SSA-/ASS-Untertiteln zulassen</string>
+    <string name="pref_exoplayer_tone_map_hdr">HDR in SDR umwandeln</string>
+    <string name="pref_exoplayer_tone_map_hdr_summary">Helleres Bild bei HDR-Videos, die für dunkle Räume gemastert sind. Ausschalten für echtes HDR.</string>
     <string name="menu_item_software_decoding">Software-Dekodierung</string>
     <string name="pref_exoplayer_start_landscape_video_in_landscape">Querformat-Videos in Querformat-Ausrichtung starten</string>
     <string name="pref_subtitle_style_summary">Du kannst den Untertitelstil in den Android-Einstellungen anpassen</string>

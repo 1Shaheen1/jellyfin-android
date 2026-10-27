@@ -110,6 +110,8 @@
     <string name="pref_exoplayer_allow_background_audio_summary">Allow playing videos in the background with audio-only</string>
     <string name="pref_exoplayer_allow_horizontal_gesture">Horizontal gestures</string>
     <string name="pref_exoplayer_allow_horizontal_gesture_summary">Allow horizontal gesture control for video seeking</string>
+    <string name="pref_exoplayer_tone_map_hdr">Convert HDR to SDR</string>
+    <string name="pref_exoplayer_tone_map_hdr_summary">Brighter picture for HDR videos, which are mastered for dark rooms. Turn off to watch in real HDR.</string>
     <string name="pref_exoplayer_direct_play_ass">Allow SSA/ASS subtitles in direct play</string>
     <string name="pref_exoplayer_direct_play_ass_summary">Prevent transcoding and show subtitles with basic styling only. Advanced subtitle styling will not be available if enabled.</string>
     <string name="pref_exoplayer_network_buffer">Playback buffer size</string>
